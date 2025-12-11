@@ -1,3 +1,4 @@
+# 相机控制
 import cv2
 import pyrealsense2 as rs
 import numpy as np
@@ -72,6 +73,15 @@ class RealSenseCamera:
         vis = o3d.visualization.VisualizerWithKeyCallback()
         vis.create_window("RealSense d405 PointCloud Stream", width=800, height=600)
 
+        # 设置o3d展示界面的参数
+        opt = vis.get_render_option()
+        opt.background_color = (0,0,0)
+        opt.point_size = 1
+
+        # 添加坐标轴
+        axis = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.5,origin=[0,0,0])
+        vis.add_geometry(axis)
+
         pcd = o3d.geometry.PointCloud()
         vis.add_geometry(pcd)
 
@@ -128,6 +138,9 @@ class RealSenseCamera:
         vis.destroy_window()
         print("Visualization thread stopped.")
 
+
+    def get_intrinsics(self):
+        return self.intrinsics
     # -----------------------------------------------------------------------
     # 获取帧
     # -----------------------------------------------------------------------
@@ -382,10 +395,14 @@ if __name__ == '__main__':
             else:
                 print("默认使用点云可视化")
                 camera.visualize_point_cloud()
+
         except KeyboardInterrupt:
             print("\n程序被用户中断")
         except Exception as e:
             print(f"Error: {e}")
             import traceback
-
             traceback.print_exc()
+        finally:
+            camera.stop()
+    # camera = RealSenseCamera()
+    # camera.visualize_rgb_depth()
