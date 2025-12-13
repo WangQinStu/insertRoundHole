@@ -12,13 +12,17 @@ class CircleDetector:
         self.min_area = 40
         self.circularity_thresh = 0.75
 
-        # --- 稳定化参数 ---
+        # --- 稳定化 滤波参数 ---
         self.alpha = 0.3  # EMA 滤波系数
         self.prev_circle = None  # (cx, cy, r)
 
         # --- 连续帧中值滤波 ---
         self.buffer_size = 5
         self.cx_buf, self.cy_buf, self.r_buf = [], [], []
+
+        # 添加：检测失败计数
+        # self.fail_count = 0
+        # self.max_fail_count = 10  # 连续失败10次才清空缓存
 
     def preprocess(self, frame):
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -118,8 +122,15 @@ class CircleDetector:
         best = self.select_best_circle(candidates)
 
         if best is None:
+            # self.fail_count += 1
+            # # 连续失败太多次才清空历史
+            # if self.fail_count >= self.max_fail_count:
+            #     self.prev_circle = None
+            #     self.cx_buf.clear()
+            #     self.cy_buf.clear()
+            #     self.r_buf.clear()
             return None  # 没检测到
-
+        # self.fail_count = 0  # 重置失败计数
         cx, cy, r = best
         return self.smooth_circle(cx, cy, r)
 

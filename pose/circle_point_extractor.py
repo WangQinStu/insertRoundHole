@@ -11,6 +11,67 @@ class CirclePointCloudExtractor:
         """
         self.margin = margin
         self.depth_scale = depth_scale
+        self.circle_center_3d = None
+
+    def get_circle_center_3d(self, circle ,depth_image, camera):
+        """
+         计算圆心的3D坐标
+
+         Args:
+             circle: (cx, cy, r)
+             depth_image: 深度图
+             camera: RealSenseCamera实例
+
+         Returns:
+             np.array([x, y, z]) 或 None
+         """
+        if circle is None:
+            return None
+        cx, cy, r = map(int, circle)
+
+        # 在圆心周围取深度中值（更鲁棒）
+        radius_sample = max(3, int(r * 0.3))
+        y_min = max(0, cy - radius_sample)
+        y_max = min(depth_image.shape[0], cy + radius_sample)
+        x_min = max(0, cx - radius_sample)
+        x_max = min(depth_image.shape[1], cx + radius_sample)
+
+        depth_region = depth_image[y_min:y_max, x_min:x_max]
+        valid_depths = depth_region[depth_region > 0]
+
+        if len(valid_depths) == 0:
+            return None
+
+        # 使用中值深度
+        depth_value = np.median(valid_depths)
+
+        # 获取depth_scale
+        if self.depth_scale is None:
+            self.depth_scale = camera.depth_scale
+
+        z = depth_value * self.depth_scale
+
+        if z <= 0 or z > 2.5:
+            return None
+
+        # 获取相机内参
+        intrinsics = camera.get_intrinsics()
+        fx = intrinsics.intrinsic_matrix[0, 0]
+        fy = intrinsics.intrinsic_matrix[1, 1]
+        cx_intr = intrinsics.intrinsic_matrix[0, 2]
+        cy_intr = intrinsics.intrinsic_matrix[1, 2]
+
+        # 反投影到3D
+        x = (cx - cx_intr) * z / fx
+        y = (cy - cy_intr) * z / fy
+
+        # 应用坐标变换（与点云一致）
+        center_3d = np.array([x, y, z])
+
+        # 保存到实例变量
+        self.circle_center_3d = center_3d
+
+        return center_3d
 
     def extract(self, pcd_full, circle, color_image, depth_image, intrinsics, camera=None):
         """

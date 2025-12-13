@@ -24,6 +24,9 @@ class CirclePointCloudLiveViewer:
         self.center_sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.005)
         self.center_sphere.paint_uniform_color([1, 0, 0])  # 红色
 
+        # 圆心文本标注（用三个坐标轴表示）
+        self.center_axes = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.02,origin=[0, 0, 0])
+
     def _visualizer_thread(self):
         """Open3D可视化线程"""
         vis = o3d.visualization.Visualizer()
@@ -44,6 +47,9 @@ class CirclePointCloudLiveViewer:
 
         # 添加圆心小球
         vis.add_geometry(self.center_sphere)
+
+        # 添加坐标轴
+        vis.add_geometry(self.center_axes)
 
         # 设置视角
         ctr = vis.get_view_control()
@@ -67,9 +73,20 @@ class CirclePointCloudLiveViewer:
 
                 vis.update_geometry(pcd)
 
-                # 更新圆心小球位置（如果 extractor 里有 circle_center）
-                if hasattr(self.extractor, 'circle_center') and self.extractor.circle_center is not None:
-                    self.center_sphere.translate(self.extractor.circle_center - np.asarray(self.center_sphere.get_center()), relative=False)
+                # 更新圆心位置（关键修改！）
+                if self.extractor.circle_center_3d is not None:
+                    center = self.extractor.circle_center_3d
+                    center = np.array([center[0], - center[1], - center[2]])
+                    # 更新球体位置
+                    current_center = np.asarray(self.center_sphere.get_center())
+                    translation = center - current_center
+                    self.center_sphere.translate(translation, relative=False)
+
+                    # 更新坐标轴位置
+                    self.center_axes.translate(center, relative=False)
+
+                    # vis.update_geometry(self.center_sphere)
+                    vis.update_geometry(self.center_axes)
 
                 if to_reset:
                     vis.reset_view_point(True)
@@ -113,15 +130,23 @@ class CirclePointCloudLiveViewer:
                     cx, cy, r = map(int, circle)
                     cv2.circle(result, (cx, cy), r, (0, 255, 0), 2)
                     cv2.circle(result, (cx, cy), 2, (0, 0, 255), 3)
+
+                    # 计算圆心3D坐标（关键添加！）
+                    center_3d = self.extractor.get_circle_center_3d(
+                        circle, depth_frame, camera
+                    )
+
+                    # 在2D图像上显示3D坐标
+                    if center_3d is not None:
+                        text = f"Center: ({center_3d[0]:.3f}, {center_3d[1]:.3f}, {center_3d[2]:.3f})m"
+                        cv2.putText(result, text, (10, 30),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
+
                     cv2.putText(result, f"({cx},{cy}) r={r}", (cx + 10, cy - 10),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
 
                     # 提取圆区域点云
                     pcd_circle = self.extractor.extract(None, circle, color_frame, depth_frame, intrinsics, camera)
-
-                    # 计算圆心 xyz 并保存在 extractor 里
-                    # circle_center = self.extractor.get_circle_center_xyz(circle, depth_frame, intrinsics, camera)
-                    # self.extractor.circle_center = circle_center
 
                     # 放入队列更新显示
                     if pcd_circle is not None and len(pcd_circle.points) > 0:
