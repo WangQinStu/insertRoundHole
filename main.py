@@ -1,32 +1,5 @@
-from realsense.rs_camera import RealSenseCamera
-from detection.circle_detector import CircleDetector
-from pose.circle_point_extractor import CirclePointCloudExtractor
-from pose.circle_point_live_viewer import CirclePointCloudLiveViewer
-
-
-def main():
-    cap = RealSenseCamera()
-    detector = CircleDetector()
-    extractor = CirclePointCloudExtractor(margin=10)
-    viewer = CirclePointCloudLiveViewer(extractor, detector)
-
-    print("=" * 60)
-    print("🎯 圆孔检测与3D定位系统")
-    print("=" * 60)
-    print("红色球体 = 圆心位置")
-    print("彩色坐标轴 = 圆心坐标系")
-    print("ESC键退出")
-    print("=" * 60)
-
-    try:
-        viewer.run(cap)
-    finally:
-        cap.stop()
-
-        # 打印最终圆心坐标
-        if extractor.circle_center_3d is not None:
-            print(f"\n最终圆心坐标: {extractor.circle_center_3d}")
+from app.run_integrated_viewer import run_integrated_detection
 
 
 if __name__ == "__main__":
-    main()
+    run_integrated_detection()

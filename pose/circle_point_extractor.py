@@ -3,7 +3,7 @@ import open3d as o3d
 
 
 class CirclePointCloudExtractor:
-    def __init__(self, margin=20, depth_scale=None):
+    def __init__(self, margin=30, depth_scale=None):
         """
         Args:
             margin: 圆周围的额外像素边距

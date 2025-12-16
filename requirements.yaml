@@ -1,0 +1,12 @@
+name: insert-round-hole
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      - numpy>=1.24
+      - opencv-contrib-python>=4.8
+      - pyrealsense2>=2.55
+      - open3d>=0.18

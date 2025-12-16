@@ -57,6 +57,11 @@ class CircleDetector:
             if len(cnt) < 5:
                 continue  # fitEllipse 需要 ≥5 点
 
+            # 剔除接近方形的轮廓（避免将二维码方块当成圆）
+            approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
+            if len(approx) <= 5:
+                continue
+
             (cx, cy), (MA, ma), angle = cv2.fitEllipse(cnt)
             r = (MA + ma) / 4  # 将椭圆近似为圆，取平均半径
 
