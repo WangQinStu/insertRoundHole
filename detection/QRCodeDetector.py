@@ -35,7 +35,7 @@ class AprilTagPoseEstimator:
         self.parameters = cv2.aruco.DetectorParameters()
         self.detector = cv2.aruco.ArucoDetector(self.dictionary, self.parameters)
 
-        # 标签三维角点（标签局部坐标系）
+        # 标签三维角点（标签局部坐标系）???
         s = tag_size / 2.0
         self.obj_points = np.array([
             [-s, s, 0],  # 角点0：左上
@@ -218,19 +218,17 @@ def main():
     cap = RealSenseCamera()
 
     # ===== 参数设置 =====
-    TAG_SIZE = 0.007  # 标签边长 7mm = 0.007米
+    TAG_SIZE = 0.008 # 标签大小
 
     # 棒子末端相对标签中心的位置偏移
-    ROD_OFFSET = np.array([0.0, 0.032, 0.0])  # (X, Y, Z) 米
+    ROD_OFFSET = np.array([-0.034, 0.0,  0.0])  # (X, Y, Z) 米
 
     # 棒子相对标签的旋转（可选）
-    # 示例1: 姿态与标签完全相同
+    # 1: 姿态与标签完全相同
     ROD_ROTATION = None  # 或 np.eye(3)
-
-    # 示例2: 如果想让棒子的Z轴指向棒子延伸方向
+    # 2: 如果想让棒子的Z轴指向棒子延伸方向
     # ROD_ROTATION = create_rod_rotation_matrix('x', 90)  # 绕X轴旋转90度
-
-    # 示例3: 自定义旋转
+    # 3: 自定义旋转
     # ROD_ROTATION = create_rod_rotation_matrix('z', 45)  # 绕Z轴旋转45度
 
     estimator = AprilTagPoseEstimator(

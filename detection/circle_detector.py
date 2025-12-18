@@ -10,7 +10,9 @@ class CircleDetector:
         self.canny_low = 50
         self.canny_high = 120
         self.min_area = 40
-        self.circularity_thresh = 0.75
+        self.min_radius = 5
+        self.circularity_thresh = 0.85  # 提高阈值，降低把方块识别成圆的概率
+        self.area_ratio_thresh = 0.80  # 轮廓面积 / 拟合圆面积
 
         # --- 稳定化 滤波参数 ---
         self.alpha = 0.3  # EMA 滤波系数
@@ -64,6 +66,17 @@ class CircleDetector:
 
             (cx, cy), (MA, ma), angle = cv2.fitEllipse(cnt)
             r = (MA + ma) / 4  # 将椭圆近似为圆，取平均半径
+
+            # 面积占比过滤：二维码等方形的面积占包络圆的比例更低
+            circle_area = np.pi * r * r
+            if circle_area <= 0:
+                continue
+            area_ratio = area / circle_area
+            if area_ratio < self.area_ratio_thresh:
+                continue
+
+            if r < self.min_radius:
+                continue
 
             candidates.append((cx, cy, r))
 
