@@ -18,10 +18,11 @@ class RealSenseCamera:
     - 可视化 RGB / Depth / RGB+Depth / PointCloud
     """
 
-    def __init__(self, width=640, height=480, fps=30):
+    def __init__(self, width=848, height=480, fps=30):
         self.width = width
         self.height = height
         self.fps = fps
+        self.started = False
 
         self.pcd_queue = queue.Queue(maxsize=2)
         self.vis_thread = None
@@ -39,6 +40,7 @@ class RealSenseCamera:
         # start streaming
         try:
             self.profile = self.pipeline.start(config)
+            self.started = True
         except Exception as e:
             print(f"Failed to start pipeline: {e}")
             raise
@@ -405,6 +407,8 @@ class RealSenseCamera:
     def stop(self):
         """停止相机"""
         self.running = False
+        if not self.started:
+            return
         try:
             self.pipeline.stop()
             print("相机已成功停止。")

@@ -52,6 +52,16 @@ def project_normal_to_image(center_cam: np.ndarray, normal_cam: np.ndarray, K: n
         return None, None
 
 
+def distance_from_camera(point_cam: np.ndarray | None) -> float | None:
+    """Compute Euclidean distance from the camera optical center to a 3D point."""
+    if point_cam is None:
+        return None
+    flat = np.asarray(point_cam).reshape(-1)
+    if flat.shape[0] != 3:
+        return None
+    return float(np.linalg.norm(flat))
+
+
 def estimate_normal_multiscale(circle, depth_image, intrinsics_o3d, depth_scale):
     """Multiscale ring sampling + RANSAC plane fit for a stable hole normal."""
     if circle is None:
@@ -161,14 +171,20 @@ def run_integrated_detection(camera: RealSenseCamera | None = None):
     pose estimation share a single RealSense stream without grabbing the device twice.
     """
     owns_camera = camera is None
-    camera = camera or RealSenseCamera()
+    if camera is None:
+        try:
+            camera = RealSenseCamera()
+        except Exception as exc:
+            print("无法启动 RealSense 相机，请检查连接/权限/是否被其他进程占用。")
+            print(f"底层报错: {exc}")
+            return
     circle_detector = CircleDetector()
     circle_extractor = CirclePointCloudExtractor(margin=10)
     last_circle = None
     last_circle_3d = None
 
     tag_size = 0.007  # meters
-    rod_offset = np.array([-0.0035, 0.0,  -0.02])  # meters
+    rod_offset = np.array([ 0.0, -0.0035,  -0.01])  # meters
     rod_rotation = None
 
     pose_estimator = AprilTagPoseEstimator(
@@ -177,11 +193,6 @@ def run_integrated_detection(camera: RealSenseCamera | None = None):
         rod_offset=rod_offset,
         rod_rotation=rod_rotation,
     )
-
-    print("=" * 70)
-    print("Integrated viewer: Circle detector + AprilTag 6D pose")
-    print("ESC to exit")
-    print("=" * 70)
 
     last_rod_position = None
     last_rpy = None
@@ -192,6 +203,8 @@ def run_integrated_detection(camera: RealSenseCamera | None = None):
     alpha_normal = 0.2
     intrinsics_o3d = camera.get_intrinsics()
     depth_scale = camera.depth_scale
+    last_circle_distance = None
+    last_tag_distance = None
 
     try:
         while True:
@@ -203,7 +216,7 @@ def run_integrated_detection(camera: RealSenseCamera | None = None):
 
             circle = circle_detector.detect(color_frame)
             circle_center_3d = None
-
+            circle_xyz_text = None
             if circle is not None:
                 last_circle = circle
                 cx, cy, r = map(int, circle)
@@ -214,8 +227,8 @@ def run_integrated_detection(camera: RealSenseCamera | None = None):
                 circle_center_3d = circle_extractor.get_circle_center_3d(circle, depth_frame, camera)
                 if circle_center_3d is not None:
                     last_circle_3d = circle_center_3d
-                    text = f"Circle XYZ (m): {circle_center_3d[0]:.3f}, {circle_center_3d[1]:.3f}, {circle_center_3d[2]:.3f}"
-                    cv2.putText(display, text, (10, display.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2)
+                    circle_xyz_text = f"Circle XYZ (m): {circle_center_3d[0]:.3f}, {circle_center_3d[1]:.3f}, {circle_center_3d[2]:.3f}"
+                    # cv2.putText(display, text, (10, display.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2)
             elif last_circle is not None:
                 cx, cy, r = map(int, last_circle)
                 cv2.circle(display, (cx, cy), r, (0, 180, 0), 1)
@@ -223,12 +236,14 @@ def run_integrated_detection(camera: RealSenseCamera | None = None):
                 cv2.putText(display, "Circle (prev)", (cx + 10, cy - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (150, 255, 255), 1)
 
                 if last_circle_3d is not None:
-                    text = f"Circle XYZ (m): {last_circle_3d[0]:.3f}, {last_circle_3d[1]:.3f}, {last_circle_3d[2]:.3f}"
-                    cv2.putText(display, text, (10, display.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2)
+                    circle_xyz_text = f"Circle XYZ (m): {last_circle_3d[0]:.3f}, {last_circle_3d[1]:.3f}, {last_circle_3d[2]:.3f}"
+                    # cv2.putText(display, text, (10, display.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2)
 
             rod_text = "Rod XYZ (m): ---, ---, ---"
             rpy_text = "Rod RPY (deg): ---, ---, ---"
             circle_pose_text = "Circle RPY (deg): ---, ---, ---"
+            circle_distance_text = "CaToCircle Distance(m): ---"
+            tag_distance_text = "CamToAprilTag Distance(m): ---"
 
             corners, tag_id = pose_estimator.detect_tag(color_frame)
             if corners is not None:
@@ -254,6 +269,10 @@ def run_integrated_detection(camera: RealSenseCamera | None = None):
                     pos = rod_position.reshape(-1)
                     rod_text = f"Rod XYZ (m): {pos[0]:.3f}, {pos[1]:.3f}, {pos[2]:.3f}"
                     rpy_text = f"Rod RPY (deg): {roll:.1f}, {pitch:.1f}, {yaw:.1f}"
+                    tag_distance = distance_from_camera(tvec)
+                    if tag_distance is not None:
+                        last_tag_distance = tag_distance
+                        tag_distance_text = f"CamToAprilTag Distance(m): {tag_distance:.3f}"
 
                     # Project rod tip for a small visual marker
                     rod_tip_2d, _ = cv2.projectPoints(rod_position.reshape(1, 3), np.zeros((3, 1)), np.zeros((3, 1)), pose_estimator.K, pose_estimator.dist)
@@ -264,6 +283,8 @@ def run_integrated_detection(camera: RealSenseCamera | None = None):
                 pos = last_rod_position.reshape(-1)
                 rod_text = f"Rod XYZ (m): {pos[0]:.3f}, {pos[1]:.3f}, {pos[2]:.3f}"
                 rpy_text = f"Rod RPY (deg): {last_rpy[0]:.1f}, {last_rpy[1]:.1f}, {last_rpy[2]:.1f}"
+                if last_tag_distance is not None:
+                    tag_distance_text = f"CamToAprilTag Distance(m): {last_tag_distance:.3f}"
 
             if circle_center_3d is not None:
                 normal, _ = estimate_normal_multiscale(circle, depth_frame, intrinsics_o3d, depth_scale)
@@ -289,12 +310,21 @@ def run_integrated_detection(camera: RealSenseCamera | None = None):
                     if start and end:
                         cv2.arrowedLine(display, start, end, (0, 255, 255), 2, tipLength=0.2)
                         cv2.putText(display, "Circle Normal", (end[0] + 5, end[1]), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 255), 1)
+                circle_cam_distance = distance_from_camera(circle_center_3d)
+                if circle_cam_distance is not None:
+                    last_circle_distance = circle_cam_distance
+                    circle_distance_text = f"CamToCircle Distance (m): {circle_cam_distance:.3f}"
             elif last_circle_rpy is not None:
                 circle_pose_text = f"Circle RPY (deg): {last_circle_rpy[0]:.1f}, {last_circle_rpy[1]:.1f}, {last_circle_rpy[2]:.1f}"
+            if circle_center_3d is None and last_circle_distance is not None:
+                circle_distance_text = f"CamToCircle CamToCircle (m): {last_circle_distance:.3f}"
 
-            cv2.putText(display, rod_text, (10, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
-            cv2.putText(display, rpy_text, (10, 46), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
-            cv2.putText(display, circle_pose_text, (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+            cv2.putText(display, rod_text, (10, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
+            cv2.putText(display, rpy_text, (10, 46), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
+            cv2.putText(display, circle_xyz_text, (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
+            cv2.putText(display, circle_pose_text, (10, 94), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
+            cv2.putText(display, circle_distance_text, (10, 130), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
+            cv2.putText(display, tag_distance_text, (10, 154), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
 
             cv2.imshow("Circle + AprilTag Viewer", display)
             if cv2.waitKey(1) & 0xFF == 27:
