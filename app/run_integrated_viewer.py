@@ -166,9 +166,6 @@ def estimate_normal_multiscale(circle, depth_image, intrinsics_o3d, depth_scale)
 def run_integrated_detection(camera: RealSenseCamera | None = None):
     """
     Run circle detector and AprilTag-based 6D pose estimation in a single viewer.
-
-    If a camera instance is provided it will be reused, so circle detection and AprilTag
-    pose estimation share a single RealSense stream without grabbing the device twice.
     """
     owns_camera = camera is None
     if camera is None:
@@ -325,7 +322,11 @@ def run_integrated_detection(camera: RealSenseCamera | None = None):
             cv2.putText(display, circle_pose_text, (10, 94), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
             cv2.putText(display, circle_distance_text, (10, 130), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
             cv2.putText(display, tag_distance_text, (10, 154), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
-
+            print('******************************************************')
+            print('circle xyz:', circle_center_3d)
+            print('circle rpy:', circle_pose_text)
+            print('rod xyz:', rod_text)
+            print('rod rpy:', rpy_text)
             cv2.imshow("Circle + AprilTag Viewer", display)
             if cv2.waitKey(1) & 0xFF == 27:
                 break
